@@ -1,0 +1,250 @@
+---
+title: "Replication of Experiment 2 in Newman et al.(2011) [stimulated data only]"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+Load and clean data
+------------------------------------
+```{r,echo=TRUE,fig.height=5, fig.width=10,message=FALSE}
+#load packages and data
+library(dplyr)
+library(kableExtra)
+library(ggstatsplot)
+library(car)
+library(MOTE)
+
+mydata = read.csv("./NOCHECK Finalized survey_v2: Newman et al. (2015)_November 9, 2021_21.14.csv")
+```
+
+Select data
+------------------------------------
+```{r}
+mydata = mydata[-1,]
+mydata = mydata[-1,]
+
+newdata = select(mydata, c(343:392))
+PC.numeric = lapply(newdata[,2:25], as.numeric)
+NC.numeric = lapply(newdata[,27:50], as.numeric)
+```
+
+
+Group data
+------------------------------------
+```{r}
+#by valence
+newdata = newdata %>%
+  mutate(valence = ifelse(newdata$Intention_pc. != "", 1, 0)) #positive = 1, negative = 0
+
+#by manipulation
+newdata = newdata %>%
+  mutate(manipulation = ifelse(newdata$Intention_pchd != "" | newdata$Intention_pcdd != ""| newdata$Intention_nchd != "" | newdata$Intention_ncdd != "" , 1, 0)) #market demand = 1, contagion = 0
+
+#by direction
+newdata = newdata %>%
+  mutate(direction = ifelse(newdata$Intention_pchd != "" | newdata$Intention_pchc != ""| newdata$Intention_nchd != "" | newdata$Intention_nchc != "" , 1, 0)) #highlight = 1, decreased = 0
+
+#by condition
+newdata = newdata %>%
+  mutate(condition = ifelse(newdata$valence == 1 & newdata$manipulation ==1 & newdata$direction == 1, "pchd", ifelse(newdata$valence == 1 & newdata$manipulation ==1 & newdata$direction == 0, "pcdd", ifelse(newdata$valence == 1 & newdata$manipulation ==0 & newdata$direction == 1, "pchc", ifelse(newdata$valence == 1 & newdata$manipulation ==0 & newdata$direction == 0, "pcdc", ifelse(newdata$valence == 0 & newdata$manipulation ==1 & newdata$direction == 1, "nchd", ifelse(newdata$valence == 0 & newdata$manipulation ==1 & newdata$direction == 0, "ncdd", ifelse(newdata$valence == 0 & newdata$manipulation ==0 & newdata$direction == 1, "nchc", "ncdc")))))))) 
+#first two place: pc --> positive celebrity, nc -->negative celebrity 
+#third place: h--> higlighted, d-->decreased; 
+#fourth place: c-->contagion, d-->market demand
+```
+
+
+
+Calculate the difference of purchase intention before and after manipulation by individual
+------------------------------------
+```{r}
+#Purchase intention
+newdata = newdata %>%
+  mutate(IntentionDiff = ifelse(newdata$condition == "pchd", PC.numeric$Intention_pc. - PC.numeric$Intention_pchd, ifelse(newdata$condition == "pcdd", PC.numeric$Intention_pc. - PC.numeric$Intention_pcdd,  ifelse(newdata$condition == "pchc", PC.numeric$Intention_pc. - PC.numeric$Intention_pchc, ifelse(newdata$condition == "pcdc", PC.numeric$Intention_pc. - PC.numeric$Intention_pcdc, ifelse(newdata$condition == "nchd", NC.numeric$Intention_nc - NC.numeric$Intention_nchd,  ifelse(newdata$condition == "ncdd", NC.numeric$Intention_nc - NC.numeric$Intention_ncdd, ifelse(newdata$condition == "nchc", NC.numeric$Intention_nc - NC.numeric$Intention_nchc.,NC.numeric$Intention_nc - NC.numeric$Intention_ncdc.))))))))
+
+#Pleasure of wearing
+newdata = newdata %>%
+  mutate(PleasureDiff = ifelse(newdata$condition == "pchd", PC.numeric$Wearing_pc - PC.numeric$Wearing_pchd, ifelse(newdata$condition == "pcdd", PC.numeric$Wearing_pc - PC.numeric$Wearing_pcdd,  ifelse(newdata$condition == "pchc", PC.numeric$Wearing_pc - PC.numeric$Wearing_pchc, ifelse(newdata$condition == "pcdc", PC.numeric$Wearing_pc - PC.numeric$Pleasure_pcdc, ifelse(newdata$condition == "nchd", NC.numeric$Wearing_nc. - NC.numeric$Wearing_nchd.,  ifelse(newdata$condition == "ncdd", NC.numeric$Wearing_nc. - NC.numeric$Wearing_ncdd, ifelse(newdata$condition == "nchc", NC.numeric$Wearing_nc. - NC.numeric$Wearing_nchc,NC.numeric$Wearing_nc. - NC.numeric$Wearing_ncdc.))))))))
+```
+
+
+Descriptive Statistics
+------------------------------------
+```{r,echo=TRUE,fig.height=5, fig.width=10,message=TRUE}
+#purchase intention
+descriptive.intention = newdata %>%
+  group_by(condition) %>%
+  summarise_at(vars(IntentionDiff), list(Average = mean, Min = min, Max = max, SD = sd, Median = median), na.rm = TRUE)
+
+descriptive.intention$Average = round(descriptive.intention$Average, digit = 2)
+descriptive.intention$SD = round(descriptive.intention$SD, digit = 2)
+
+#Pleasure of Wearing
+descriptive.pleasure = newdata %>%
+  group_by(condition) %>%
+  summarise_at(vars(PleasureDiff), list(Average = mean, Min = min, Max = max, SD = sd, Median = median), na.rm = TRUE)
+
+descriptive.pleasure$Average = round(descriptive.pleasure$Average, digit = 2)
+descriptive.pleasure$SD = round(descriptive.pleasure$SD, digit = 2)
+```
+
+
+Visualization of Descriptive Statistics
+------------------------------------
+```{r,echo=TRUE,message=TRUE}
+#Table Summary
+descriptive.intention %>%
+  kbl(caption = "Descriptive Statistics: Purchase intention") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+descriptive.pleasure %>%
+  kbl(caption = "Descriptive Statistics: Pleasure of Wearing") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+
+#Graph Summary
+ggbetweenstats(newdata, condition, IntentionDiff)
+ggbetweenstats(newdata, valence, IntentionDiff)
+ggbetweenstats(newdata, manipulation, IntentionDiff)
+ggbetweenstats(newdata, direction, IntentionDiff)
+
+ggbetweenstats(newdata, condition, PleasureDiff)
+ggbetweenstats(newdata, valence, PleasureDiff)
+ggbetweenstats(newdata, manipulation, PleasureDiff)
+ggbetweenstats(newdata, direction, PleasureDiff)
+
+```
+
+Statistical Test
+------------------------------------
+```{r,echo=TRUE,message=TRUE}
+#main and interaction effect
+##purchase intention
+m.intention = aov(IntentionDiff ~ valence*manipulation*direction, newdata)
+summary(m.intention)
+##pleasure of wearing
+m.pleasure = aov(PleasureDiff ~ valence*manipulation*direction, newdata)
+summary(m.pleasure)
+
+#contrast
+sub.positive = subset(newdata, valence == 1)
+sub.negative = subset(newdata, valence == 0)
+##positive
+m.p.intention = aov(IntentionDiff ~ manipulation*direction, sub.positive)
+summary(m.p.intention)
+m.p.pleasure = aov(PleasureDiff ~ manipulation*direction, sub.positive)
+summary(m.p.pleasure)
+##negative
+m.n.intention = aov(IntentionDiff ~ manipulation*direction, sub.negative)
+summary(m.n.intention)
+m.n.pleasure = aov(PleasureDiff ~ manipulation*direction, sub.negative)
+summary(m.n.pleasure)
+
+```
+
+Manipulation Check
+------------------------------------
+```{r,echo=TRUE,message=TRUE}
+#compare the proportion of famous person between positive and negative conditions
+table(newdata$Manipl.check_pc) #1 = famous, 2 = not famous
+table(newdata$Manipul.check_nc.)   
+fisher.test(matrix(c(137,147,153,131),2))
+
+```
+
+
+Assumption Check
+------------------------------------
+```{r,echo=TRUE,message=TRUE}
+#purchase intention
+##Homogeneity of variances
+plot(m.intention, 1)
+leveneTest(newdata$IntentionDiff, newdata$condition)
+
+plot(m.pleasure, 1)
+leveneTest(newdatat$PleasureDiff, mewdata$condition)
+
+##Normality
+plot(m.intention, 2)
+shapiro.test(x = residuals(object = m.intention))
+
+plot(m.pleasure, 2)
+shapiro.test(x = residuals(object = m.pleasure))
+
+```
+
+Power Analysis
+------------------------------------
+```{r,echo=TRUE,message=TRUE}
+##Main and interaction effect
+##purchase intention
+###valence
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.901, a =.05)
+###manipulation
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.762, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.059, a =.05)
+###valence* manipulation
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.024, a =.05)
+###valence*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.853, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 1.58, a =.05)
+###valence*manipulation*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.002, a =.05)
+
+
+##pleasure of wearing
+###valence
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.021, a =.05)
+###manipulation
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.500, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 1.655, a =.05)
+###valence* manipulation
+eta.F(dfm = 1, dfe = 560, Fvalue = 4.473, a =.05)
+###valence*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.033, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 0.777, a =.05)
+###valence*manipulation*direction
+eta.F(dfm = 1, dfe = 560, Fvalue = 3.690, a =.05)
+
+
+#Contrast
+##positive: purchase intention
+###manipulation
+eta.F(dfm = 1, dfe = 280, Fvalue = 506, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.650, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.702, a =.05)
+
+##positive: pleasure of wearing
+###manipulation
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.992, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.600, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 3.906, a =.05)
+
+
+##negative: purchase intention
+###manipulation
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.269, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.243, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.889, a =.05)
+
+##negative: pleasure of wearing
+###manipulation
+eta.F(dfm = 1, dfe = 280, Fvalue = 4.015, a =.05)
+###direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 1.071, a =.05)
+###manipulation*direction
+eta.F(dfm = 1, dfe = 280, Fvalue = 0.543, a =.05)
+
+```
+
